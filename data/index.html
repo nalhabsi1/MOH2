@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>MOH</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+
+<!-- MapLibre -->
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+
+<!-- Chart.js + Datalabels -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+
+<style>
+  :root{ --panel:rgba(10,26,69,0.12); --panel-2:rgba(7,18,46,0.1); --border:#55a7ff55;
+    --text:#0e1114; --muted:#090a0b; --accent:#131414; }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{
+    margin:0; color:var(--text); font:14px/1.4 ui-sans-serif,system-ui,"Segoe UI",Roboto,Arial;
+    background:
+      radial-gradient(1200px 700px at 70% -10%, #2a5fff22 0%, transparent 60%),
+      radial-gradient(900px 600px at 20% 110%, #0ea5e955 0%, transparent 65%),
+      linear-gradient(180deg,#07122e 0%, #0a1a45 40%, #0a1a45 100%);
+    overflow:hidden;
+  }
+  .screen{display:grid; height:100%; gap:6px; padding:6px;
+    grid-template-rows:70px 1fr; grid-template-areas:"header" "center";}
+  .header{grid-area:header; border:1px solid var(--border); border-radius:8px;
+    background:linear-gradient(180deg,rgba(7,18,46,.12),transparent); backdrop-filter:blur(6px);
+    display:flex; align-items:center; gap:15px; padding:8px 16px; min-height:60px;}
+     .brand-logo{width:96px;height:96px;border-radius:24px;background:#ffffff11;border:1px solid var(--border)}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel-2) 120%); border:1px solid var(--border);
+    border-radius:8px; padding:8px; box-shadow:0 8px 30px #0ea5e911; backdrop-filter:blur(6px);}
+  .center{grid-area:center; display:grid; grid-template-rows:1fr; overflow:hidden}
+  #map{height:100%; border-radius:8px; border:1px solid var(--border); position:relative; overflow:hidden}
+  .overlay{ position:absolute; z-index:5; display:grid; gap:12px }
+  .overlay-left{ top:12px; left:12px; width:400px }
+  .overlay-right{ top:12px; right:12px; width:340px }
+  .filter-group{display:grid; gap:8px; margin-top:6px}
+  .filter-item{display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:10px 12px; border:1px solid var(--border); border-radius:12px;
+    background:linear-gradient(180deg,rgba(10,26,69,.12),transparent 140%)}
+  .filter-select{appearance:none; background:#0f214f; border:1px solid var(--border); border-radius:8px;
+    color:#e6f1ff; padding:8px 36px 8px 10px; font-size:12px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237cc5ff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 10px center; background-size:14px}
+  #resetFilters{cursor:pointer; background:linear-gradient(180deg,#54d0ff,#2aa8ff); color:#003; font-weight:700; border:none}
+  .legend{display:grid; gap:8px}
+  .legend-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid #7cc5ff66;border-radius:10px;background:rgba(7,18,46,.12)}
+  .legend-swatch.circle{width:14px;height:14px;border-radius:50%;border:2px solid #fff}
+  .chart-container{ position:relative; height:220px; width:100%; overflow:hidden }
+  .chart-container canvas{ max-height:100%; max-width:100% }
+</style>
+</head>
+<body>
+<div class="screen">
+
+      <header class="header">
+      <img class="brand-logo" src="data/moh-oman-logo.png" onerror="this.style.display='none'">
+      <div style="flex:1; text-align:center;">
+        <div style="font-weight:800;letter-spacing:.05em;color:#ffffff;font-size:18px">Ministry of Health GIS Platform</div>
+        <div style="color:#ffffff;font-size:12px">Health Facility Dashboard</div>
+      </div>
+      <div style="width:96px;"></div>
+    </header>
+  
+  <main class="center">
+    <section id="map" class="panel">
+
+      <!-- LEFT PANELS -->
+      <div class="overlay overlay-left">
+
+        <!-- Filters -->
+        <section class="panel">
+          <h3 style="margin:0 0 8px">Map Filters</h3>
+          <div class="filter-group">
+            <div class="filter-item">
+              <div style="font-size:12px;color:var(--muted)">Governorate</div>
+              <select id="governorateFilter" class="filter-select">
+                <option value="">All Governorates</option>
+              </select>
+            </div>
+            <div class="filter-item">
+              <div style="font-size:12px;color:var(--muted)">Facility Type</div>
+              <select id="facilityFilter" class="filter-select">
+                <option value="">All Facilities</option>
+              </select>
+            </div>
+            <div class="filter-item">
+              <button id="resetFilters" class="filter-select" style="width:100%">Reset Filters</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Births vs Deaths -->
+        <section class="panel">
+          <h3 style="margin:0 0 8px">Births vs Deaths</h3>
+          <div class="chart-container"><canvas id="lineBD"></canvas></div>
+        </section>
+
+        <!-- Bed Capacity -->
+        <section class="panel">
+          <h3 style="margin:0 0 8px">Hospital Bed Capacity</h3>
+          <div style="display:flex;align-items:center;gap:12px">
+            <img src="data/Bed.png" style="width:128px;height:128px" onerror="this.style.display='none'">
+            <div class="chart-container" style="flex:1;height:200px"><canvas id="bedChart"></canvas></div>
+          </div>
+        </section>
+
+
+      </div>
+
+      <!-- RIGHT PANELS -->
+      <div class="overlay overlay-right">
+        <section class="panel">
+          <h3 style="margin:0 0 8px">Major Hospitals Visitors</h3>
+          <canvas id="barsVisitors" height="150"></canvas>
+        </section>
+                          <section class="panel" id="movableLegend" style="cursor: move; user-select: none;">
+           <h3 style="margin:0 0 8px">Map Legend</h3>
+           <div id="legend" class="legend"></div>
+         </section>
+         
+         <!-- Powered by Geomakani -->
+         <div style="text-align: center; padding: 8px; color: var(--muted); font-size: 11px; font-style: italic;">
+           ©Powered by Geomakani
+         </div>
+       </div>
+
+    </section>
+  </main>
+
+</div>
+
+<script>
+/* ----------------------- CHARTS ----------------------- */
+Chart.register(ChartDataLabels);
+let lineBD, barsVisitors, bedChart;
+
+function initCharts(){
+  // Births vs Deaths (bar + line)
+  lineBD = new Chart(document.getElementById('lineBD'),{
+    type:'bar',
+    data:{ labels:[], datasets:[
+      { label:'Births', data:[], type:'bar', backgroundColor:'#3b82f6', borderRadius:4, barThickness:24, maxBarThickness:28 },
+      { label:'Deaths', data:[], type:'line', borderColor:'#0ea5e9', backgroundColor:'rgba(59,130,246,.1)', tension:.35, borderWidth:3, pointRadius:4 }
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ 
+        legend:{
+          labels:{
+            color:'#0f0f0f', 
+            font:{size:11,weight:'600'},
+            generateLabels: function(chart) {
+              return [
+                {
+                  text: 'Births',
+                  fillStyle: '#3b82f6',
+                  strokeStyle: '#3b82f6',
+                  lineWidth: 0,
+                  hidden: false,
+                  index: 0
+                },
+                {
+                  text: 'Deaths',
+                  fillStyle: 'transparent',
+                  strokeStyle: '#0ea5e9',
+                  lineWidth: 3,
+                  hidden: false,
+                  index: 1
+                }
+              ];
+            }
+          }
+        },
+        datalabels: { display: false }
+      },
+      scales:{
+        x:{ticks:{color:'#0f0f0f', font:{size:15}}, grid:{color:'rgba(85,167,255,.2)'}},
+        y:{ticks:{color:'#0f0f0f', callback:v=>Number(v).toLocaleString()}, grid:{color:'rgba(85,167,255,.2)'}}
+      },
+      interaction:{intersect:false, mode:'index'}
+    }
+  });
+
+  // Visitors (donut)
+  barsVisitors = new Chart(document.getElementById('barsVisitors'),{
+    type:'doughnut',
+    data:{ labels:[], datasets:[{ data:[], backgroundColor:['#1e3a8a','#1d4ed8','#2563eb','#3b82f6','#60a5fa','#93c5fd','#bfdbfe','#dbeafe'] }] },
+    options:{ cutout:'55%', plugins:{ legend:{position:'bottom'}, datalabels:{color:'#fff', font:{weight:'700'}, formatter:v=>v} } }
+  });
+
+  // Bed Capacity (horizontal bar)
+  bedChart = new Chart(document.getElementById('bedChart'),{
+    type:'bar',
+    data:{ labels:[], datasets:[{ 
+      label:'Bed Capacity', 
+      data:[], 
+      backgroundColor:'#1e40af', 
+      borderRadius:4, 
+      barThickness:20, 
+      maxBarThickness:25 
+    }]},
+    options:{
+      indexAxis: 'y',
+      responsive:true, 
+      maintainAspectRatio:false,
+      plugins:{ 
+        legend:{
+          display: false
+        },
+        datalabels:{color:'#fff', font:{weight:'700', size:10}, formatter:v=>v}
+      },
+      scales:{
+        x:{ticks:{color:'#0b1b42', font:{size:10}}, grid:{color:'rgba(85,167,255,.2)'}},
+        y:{ticks:{color:'#0b1b42', font:{size:10}}, grid:{color:'rgba(85,167,255,.2)'}}
+      },
+      interaction:{intersect:false, mode:'index'}
+    }
+  });
+
+
+}
+initCharts();
+
+/* ----------------------- CSV HELPERS ----------------------- */
+async function fetchCSV(path){
+  const r = await fetch(path);
+  if(!r.ok) throw new Error(path+' not found');
+  const text = await r.text();
+  const rows = text.trim().split(/\r?\n/).map(l => l.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(c=>c.replace(/^"|"$/g,'').trim()));
+  const H = rows.shift().map(h=>h.toLowerCase());
+  return {H, rows};
+}
+const toNum = s => Number(String(s||'0').replace(/[^\d.-]/g,''))||0;
+
+/* ----------------------- DATA LOADERS ----------------------- */
+
+// Births vs Deaths (expects headers: "births (2022)", "deaths (2022)" etc.)
+(async ()=>{
+  try{
+    const {H,rows}=await fetchCSV('data/Birth Death.csv');
+    const years = ['2022','2023','2024'];
+    const sum = (arr)=>arr.reduce((a,b)=>a+b,0);
+    const births = years.map(y=>{
+      const i = H.indexOf(`births (${y})`);
+      return i>-1 ? sum(rows.map(r=>toNum(r[i]))) : 0;
+    });
+    const deaths = years.map(y=>{
+      const i = H.indexOf(`deaths (${y})`);
+      return i>-1 ? sum(rows.map(r=>toNum(r[i]))) : 0;
+    });
+    lineBD.data.labels = years;
+    lineBD.data.datasets[0].data = births;
+    lineBD.data.datasets[1].data = deaths;
+    lineBD.update();
+  }catch(e){ console.warn('Birth Death.csv missing — skipping chart.'); }
+})();
+
+// Visitors donut (expects headers: hospitals, number of visitors)
+(async ()=>{
+  try{
+    const {H,rows}=await fetchCSV('data/Vistor.csv');
+    const iHosp = H.indexOf('hospitals');
+    const iVal  = H.indexOf('number of visitors');
+    if(iHosp<0||iVal<0) throw new Error('columns not found');
+    const totals = new Map();
+    rows.forEach(r=>{
+      const name=(r[iHosp]||'').trim(); const v=toNum(r[iVal]);
+      if(name && v>0) totals.set(name,(totals.get(name)||0)+v);
+    });
+    const sorted=[...totals.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8);
+    barsVisitors.data.labels = sorted.map(d=>d[0]);
+    barsVisitors.data.datasets[0].data = sorted.map(d=>d[1]);
+    barsVisitors.update();
+  }catch(e){ console.warn('Vistor.csv missing — skipping donut.'); }
+})();
+
+(async ()=>{
+  try{
+    const {H,rows}=await fetchCSV('data/Bed.csv');
+    const iHosp = H.indexOf('hospitals');
+    const iBed = H.indexOf('bed capacity');
+    if(iHosp<0||iBed<0) throw new Error('columns not found');
+    const bedData = rows.map(r=>{
+      const name = (r[iHosp]||'').trim();
+      const beds = toNum(r[iBed]);
+      return {name, beds};
+    }).filter(d=>d.name && d.beds>0).sort((a,b)=>b.beds-a.beds);
+    
+    bedChart.data.labels = bedData.map(d=>d.name);
+    bedChart.data.datasets[0].data = bedData.map(d=>d.beds);
+    bedChart.update();
+  }catch(e){ console.warn('Bed.csv missing — skipping bed chart.'); }
+})();
+
+const layerMeta=[
+  {key:'Blood Banks',file:'Blood Banks.geojson',color:'#059669'},
+  {key:'Clinics',file:'Clinic.geojson',color:'#0d9488'},
+  {key:'Diagnostic Center',file:'Diagnostic Center.geojson',color:'#06b6d4'},
+  {key:'Health Centers',file:'Health Centers.geojson',color:'#10b981'},
+  {key:'Health Complex',file:'Health Complex.geojson',color:'#8b5cf6'},
+  {key:'Hospital Locations',file:'Hospital Locations.geojson',color:'#3b82f6'},
+  {key:'Pharmacies',file:'Pharmacies.geojson',color:'#1e40af'}
+];
+let map; const ORIGINAL=new Map();
+
+function initMap(){
+  map=new maplibregl.Map({
+    container:'map',
+    style:'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+    center:[56.0,20.5], zoom:5.1, attributionControl:false
+  });
+  map.addControl(new maplibregl.NavigationControl({showCompass:false}));
+  map.on('load', async ()=>{
+    // Add Oman country highlight with 3D effect
+    try {
+      const omanBorder = await (await fetch('data/oman.geojson')).json();
+      map.addSource('oman-highlight', {
+        type: 'geojson',
+        data: omanBorder
+      });
+    } catch(e) {
+      // Fallback to approximate border if file not found
+      map.addSource('oman-highlight', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          geometry: {
+            type: 'Polygon',
+            coordinates: [[
+              [52.0, 16.5], // Southwest corner
+              [60.0, 16.5], // Southeast corner
+              [60.0, 26.5], // Northeast corner
+              [52.0, 26.5], // Northwest corner
+              [52.0, 16.5]  // Close the polygon
+            ]]
+          },
+          properties: { name: 'Oman' }
+        }
+      });
+    }
+    
+    // Add Oman shadow layer (bottom)
+    map.addLayer({
+      id: 'oman-shadow',
+      type: 'fill',
+      source: 'oman-highlight',
+      paint: {
+        'fill-color': '#000000',
+        'fill-opacity': 0.1,
+        'fill-translate': [3, 3]
+      }
+    });
+    
+    // Add Oman base 3D fill layer
+    map.addLayer({
+      id: 'oman-highlight-fill',
+      type: 'fill',
+      source: 'oman-highlight',
+      paint: {
+        'fill-color': '#1e40af',
+        'fill-opacity': 0.15
+      }
+    });
+    
+    // Add Oman gradient overlay for 3D effect
+    map.addLayer({
+      id: 'oman-gradient',
+      type: 'fill',
+      source: 'oman-highlight',
+      paint: {
+        'fill-color': '#3b82f6',
+        'fill-opacity': 0.1,
+        'fill-translate': [-1, -1]
+      }
+    });
+    
+    // Add Oman highlight layer (top)
+    map.addLayer({
+      id: 'oman-highlight-top',
+      type: 'fill',
+      source: 'oman-highlight',
+      paint: {
+        'fill-color': '#60a5fa',
+        'fill-opacity': 0.08,
+        'fill-translate': [-2, -2]
+      }
+    });
+    
+    // Add Oman 3D border with multiple layers
+    map.addLayer({
+      id: 'oman-border-shadow',
+      type: 'line',
+      source: 'oman-highlight',
+      paint: {
+        'line-color': '#000000',
+        'line-width': 3,
+        'line-opacity': 0.15,
+        'line-translate': [2, 2]
+      }
+    });
+    
+    map.addLayer({
+      id: 'oman-border-main',
+      type: 'line',
+      source: 'oman-highlight',
+      paint: {
+        'line-color': '#1e3a8a',
+        'line-width': 2,
+        'line-opacity': 0.4
+      }
+    });
+    
+    map.addLayer({
+      id: 'oman-border-highlight',
+      type: 'line',
+      source: 'oman-highlight',
+      paint: {
+        'line-color': '#60a5fa',
+        'line-width': 1,
+        'line-opacity': 0.3,
+        'line-translate': [-1, -1]
+      }
+    });
+    
+    for(const meta of layerMeta){
+      try{
+        const gj=await (await fetch('data/'+meta.file)).json();
+        ORIGINAL.set(meta.key, gj);
+        const src='src-'+meta.key; map.addSource(src,{type:'geojson',data:gj});
+        map.addLayer({ id:'circle-'+meta.key, type:'circle', source:src,
+          paint:{ 'circle-radius':6, 'circle-color':meta.color, 'circle-opacity':0.85 }});
+        
+        // Add popup on click
+        map.on('click', 'circle-'+meta.key, (e) => {
+          const coordinates = e.features[0].geometry.coordinates.slice();
+          const properties = e.features[0].properties;
+          
+          // Create popup content
+          let popupContent = `<div style="padding: 8px; font-family: Arial, sans-serif;">`;
+          popupContent += `<h3 style="margin: 0 0 8px 0; color: #1e40af; font-size: 14px;">${meta.key}</h3>`;
+          
+          // Add properties to popup
+          Object.keys(properties).forEach(key => {
+            if (properties[key] && properties[key] !== '') {
+              popupContent += `<p style="margin: 4px 0; font-size: 12px;"><strong>${key}:</strong> ${properties[key]}</p>`;
+            }
+          });
+          
+          popupContent += `</div>`;
+          
+          // Create and show popup
+          new maplibregl.Popup()
+            .setLngLat(coordinates)
+            .setHTML(popupContent)
+            .addTo(map);
+        });
+        
+        // Change cursor on hover
+        map.on('mouseenter', 'circle-'+meta.key, () => {
+          map.getCanvas().style.cursor = 'pointer';
+        });
+        
+        map.on('mouseleave', 'circle-'+meta.key, () => {
+          map.getCanvas().style.cursor = '';
+        });
+      }catch(e){ console.warn('Missing layer', meta.file); }
+    }
+    buildLegend(); buildFilterList(); fitToAll();
+  });
+}
+initMap();
+
+function buildLegend(){
+  const root=document.getElementById('legend'); root.innerHTML='';
+  layerMeta.forEach(m=>{
+    root.insertAdjacentHTML('beforeend',
+      `<div class="legend-item"><div class="legend-swatch circle" style="background:${m.color}"></div><div>${m.key}</div></div>`);
+  });
+}
+function fitToAll(){
+  const b=new maplibregl.LngLatBounds(); let added=false;
+  layerMeta.forEach(m=>{
+    const data=ORIGINAL.get(m.key); if(!data) return;
+    (data.features||[]).forEach(f=>{
+      const c=f.geometry.coordinates;
+      const walk=(x)=> Array.isArray(x[0]) ? x.forEach(walk) : b.extend([x[0],x[1]]);
+      walk(c); added=true;
+    });
+  });
+  if(added) map.fitBounds(b,{padding:40});
+}
+function featureGov(p){return p.GOV||p.governorate||p.Governorate||p.muhafazah||p.Muhafazah||'';}
+function populateFacilityOptions(sel){
+  sel.innerHTML=''; const all=document.createElement('option'); all.value=''; all.textContent='All Facilities'; sel.appendChild(all);
+  layerMeta.forEach(m=>{ const o=document.createElement('option'); o.value=m.key; o.textContent=m.key; sel.appendChild(o); });
+}
+function populateGovernorateOptions(){
+  const sel=document.getElementById('governorateFilter'); const S=new Set();
+  layerMeta.forEach(m=>{
+    const gj=ORIGINAL.get(m.key); if(!gj) return;
+    gj.features?.forEach(f=>{ const g=featureGov(f.properties||{}); if(g) S.add(g); });
+  });
+  sel.innerHTML='<option value="">All Governorates</option>'; [...S].sort().forEach(g=>{
+    const o=document.createElement('option'); o.value=g; o.textContent=g; sel.appendChild(o);
+  });
+}
+function applyFilters(){
+  const gov=document.getElementById('governorateFilter').value;
+  const fac=document.getElementById('facilityFilter').value;
+  layerMeta.forEach(m=>{
+    const src=map.getSource('src-'+m.key); const base=ORIGINAL.get(m.key); if(!src||!base) return;
+    const vis = !fac || fac===m.key; if(map.getLayer('circle-'+m.key)) map.setLayoutProperty('circle-'+m.key,'visibility',vis?'visible':'none');
+    const feats = !gov ? base.features : base.features.filter(f=> String(featureGov(f.properties||{}))===gov );
+    src.setData({type:'FeatureCollection',features:feats});
+  });
+  fitToAll();
+}
+function buildFilterList(){
+  populateFacilityOptions(document.getElementById('facilityFilter'));
+  populateGovernorateOptions();
+  document.getElementById('facilityFilter').addEventListener('change',applyFilters);
+  document.getElementById('governorateFilter').addEventListener('change',applyFilters);
+  document.getElementById('resetFilters').addEventListener('click',()=>{
+    document.getElementById('facilityFilter').value='';
+    document.getElementById('governorateFilter').value='';
+    applyFilters();
+  });
+  
+  // Initialize movable legend
+  makeLegendMovable();
+}
+
+// Make legend movable
+function makeLegendMovable(){
+  const legend = document.getElementById('movableLegend');
+  let isDragging = false;
+  let currentX;
+  let currentY;
+  let initialX;
+  let initialY;
+  let xOffset = 0;
+  let yOffset = 0;
+
+  legend.addEventListener('mousedown', dragStart);
+  document.addEventListener('mousemove', drag);
+  document.addEventListener('mouseup', dragEnd);
+
+  function dragStart(e) {
+    initialX = e.clientX - xOffset;
+    initialY = e.clientY - yOffset;
+    if (e.target === legend || legend.contains(e.target)) {
+      isDragging = true;
+    }
+  }
+
+  function drag(e) {
+    if (isDragging) {
+      e.preventDefault();
+      currentX = e.clientX - initialX;
+      currentY = e.clientY - initialY;
+      xOffset = currentX;
+      yOffset = currentY;
+      
+      setTranslate(currentX, currentY, legend);
+    }
+  }
+
+  function setTranslate(xPos, yPos, el) {
+    el.style.transform = `translate3d(${xPos}px, ${yPos}px, 0)`;
+  }
+
+  function dragEnd() {
+    initialX = currentX;
+    initialY = currentY;
+    isDragging = false;
+  }
+}
+</script>
+</body>
+</html>

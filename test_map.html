@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Test</title>
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css">
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial, sans-serif; }
+        #map { width: 100%; height: 600px; border: 2px solid #ccc; }
+        .info { background: #f0f0f0; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+        .test-buttons { margin-bottom: 20px; }
+        button { margin: 5px; padding: 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>Map Test - Health Data Visualization</h1>
+    
+    <div class="info">
+        <h3>Test Instructions:</h3>
+        <ol>
+            <li>Click "Test Basic Map" to verify the map works</li>
+            <li>Click "Test Point Layer" to add a test point</li>
+            <li>Click "Load Health Data" to load your actual data</li>
+            <li>Check the console for any error messages</li>
+        </ol>
+    </div>
+    
+    <div class="test-buttons">
+        <button onclick="testBasicMap()">Test Basic Map</button>
+        <button onclick="testPointLayer()">Test Point Layer</button>
+        <button onclick="loadHealthData()">Load Health Data</button>
+        <button onclick="clearMap()">Clear Map</button>
+    </div>
+    
+    <div id="map"></div>
+    
+    <div class="info">
+        <h3>Console Output:</h3>
+        <p>Open your browser's Developer Tools (F12) and check the Console tab for detailed information.</p>
+    </div>
+
+    <script>
+        let map;
+        let testSource = null;
+        let healthSource = null;
+
+        // Initialize map
+        function initMap() {
+            map = new maplibregl.Map({
+                container: 'map',
+                style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+                center: [56.0, 20.5], // Oman coordinates
+                zoom: 6
+            });
+
+            map.addControl(new maplibregl.NavigationControl());
+            
+            map.on('load', () => {
+                console.log('✅ Map loaded successfully');
+                document.querySelector('.info').innerHTML += '<p style="color: green;">✅ Map loaded successfully</p>';
+            });
+
+            map.on('error', (e) => {
+                console.error('❌ Map error:', e);
+                document.querySelector('.info').innerHTML += '<p style="color: red;">❌ Map error: ' + e.error.message + '</p>';
+            });
+        }
+
+        // Test basic map functionality
+        function testBasicMap() {
+            if (!map) {
+                initMap();
+                return;
+            }
+            
+            console.log('🧪 Testing basic map functionality...');
+            document.querySelector('.info').innerHTML += '<p style="color: blue;">🧪 Testing basic map functionality...</p>';
+            
+            // Test map methods
+            try {
+                const center = map.getCenter();
+                const zoom = map.getZoom();
+                console.log('✅ Map center:', center, 'Zoom:', zoom);
+                document.querySelector('.info').innerHTML += '<p style="color: green;">✅ Map center: ' + center.lng.toFixed(2) + ', ' + center.lat.toFixed(2) + ' Zoom: ' + zoom.toFixed(1) + '</p>';
+            } catch (e) {
+                console.error('❌ Map test failed:', e);
+                document.querySelector('.info').innerHTML += '<p style="color: red;">❌ Map test failed: ' + e.message + '</p>';
+            }
+        }
+
+        // Test adding a point layer
+        function testPointLayer() {
+            if (!map || !map.isStyleLoaded()) {
+                console.log('⏳ Waiting for map to load...');
+                map.once('idle', testPointLayer);
+                return;
+            }
+
+            console.log('🧪 Testing point layer...');
+            document.querySelector('.info').innerHTML += '<p style="color: blue;">🧪 Testing point layer...</p>';
+
+            try {
+                // Remove existing test source
+                if (testSource) {
+                    map.removeLayer('test-point-layer');
+                    map.removeSource('test-point');
+                }
+
+                // Add test point source
+                testSource = {
+                    type: 'geojson',
+                    data: {
+                        type: 'FeatureCollection',
+                        features: [{
+                            type: 'Feature',
+                            geometry: {
+                                type: 'Point',
+                                coordinates: [56.0, 20.5]
+                            },
+                            properties: {
+                                name: 'Test Point - Muscat Area'
+                            }
+                        }]
+                    }
+                };
+
+                map.addSource('test-point', testSource);
+                
+                // Add circle layer
+                map.addLayer({
+                    id: 'test-point-layer',
+                    type: 'circle',
+                    source: 'test-point',
+                    paint: {
+                        'circle-radius': 15,
+                        'circle-color': '#ff0000',
+                        'circle-opacity': 0.8,
+                        'circle-stroke-color': '#ffffff',
+                        'circle-stroke-width': 3
+                    }
+                });
+
+                console.log('✅ Test point layer added successfully');
+                document.querySelector('.info').innerHTML += '<p style="color: green;">✅ Test point layer added successfully</p>';
+
+                // Add click handler
+                map.on('click', 'test-point-layer', (e) => {
+                    new maplibregl.Popup()
+                        .setLngLat(e.lngLat)
+                        .setHTML('<b>Test Point</b><br>Click successful!')
+                        .addTo(map);
+                });
+
+            } catch (e) {
+                console.error('❌ Point layer test failed:', e);
+                document.querySelector('.info').innerHTML += '<p style="color: red;">❌ Point layer test failed: ' + e.message + '</p>';
+            }
+        }
+
+        // Load actual health data
+        async function loadHealthData() {
+            if (!map || !map.isStyleLoaded()) {
+                console.log('⏳ Waiting for map to load...');
+                map.once('idle', loadHealthData);
+                return;
+            }
+
+            console.log('🧪 Loading health data...');
+            document.querySelector('.info').innerHTML += '<p style="color: blue;">🧪 Loading health data...</p>';
+
+            try {
+                // Test loading a simple GeoJSON file
+                const response = await fetch('./data/Hospital Locations.geojson');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('✅ Hospital data loaded:', data);
+                document.querySelector('.info').innerHTML += '<p style="color: green;">✅ Hospital data loaded: ' + (data.features?.length || 0) + ' features</p>';
+
+                if (data.features && data.features.length > 0) {
+                    // Remove existing health source
+                    if (healthSource) {
+                        map.removeLayer('health-points');
+                        map.removeSource('health-data');
+                    }
+
+                    // Add health data source
+                    healthSource = data;
+                    map.addSource('health-data', {
+                        type: 'geojson',
+                        data: data
+                    });
+
+                    // Add health points layer
+                    map.addLayer({
+                        id: 'health-points',
+                        type: 'circle',
+                        source: 'health-data',
+                        paint: {
+                            'circle-radius': 8,
+                            'circle-color': '#0066ff',
+                            'circle-opacity': 0.7,
+                            'circle-stroke-color': '#ffffff',
+                            'circle-stroke-width': 2
+                        }
+                    });
+
+                    console.log('✅ Health data layer added successfully');
+                    document.querySelector('.info').innerHTML += '<p style="color: green;">✅ Health data layer added successfully</p>';
+
+                    // Add click handler
+                    map.on('click', 'health-points', (e) => {
+                        if (e.features.length > 0) {
+                            const feature = e.features[0];
+                            const props = feature.properties || {};
+                            const name = props.name || props.Name || 'Unknown Facility';
+                            
+                            new maplibregl.Popup()
+                                .setLngLat(e.lngLat)
+                                .setHTML(`<b>${name}</b><br>Type: Hospital`)
+                                .addTo(map);
+                        }
+                    });
+
+                    // Fit to data bounds
+                    const bounds = new maplibregl.LngLatBounds();
+                    data.features.forEach(feature => {
+                        if (feature.geometry && feature.geometry.coordinates) {
+                            bounds.extend(feature.geometry.coordinates);
+                        }
+                    });
+                    
+                    if (!bounds.isEmpty()) {
+                        map.fitBounds(bounds, { padding: 50 });
+                        console.log('✅ Map fitted to data bounds');
+                    }
+
+                } else {
+                    console.warn('⚠️ No features found in hospital data');
+                    document.querySelector('.info').innerHTML += '<p style="color: orange;">⚠️ No features found in hospital data</p>';
+                }
+
+            } catch (e) {
+                console.error('❌ Health data loading failed:', e);
+                document.querySelector('.info').innerHTML += '<p style="color: red;">❌ Health data loading failed: ' + e.message + '</p>';
+            }
+        }
+
+        // Clear map
+        function clearMap() {
+            if (!map) return;
+
+            try {
+                // Remove test layers
+                if (map.getLayer('test-point-layer')) {
+                    map.removeLayer('test-point-layer');
+                }
+                if (map.getSource('test-point')) {
+                    map.removeSource('test-point');
+                }
+
+                // Remove health layers
+                if (map.getLayer('health-points')) {
+                    map.removeLayer('health-points');
+                }
+                if (map.getSource('health-data')) {
+                    map.removeSource('health-data');
+                }
+
+                testSource = null;
+                healthSource = null;
+
+                console.log('✅ Map cleared');
+                document.querySelector('.info').innerHTML += '<p style="color: green;">✅ Map cleared</p>';
+
+            } catch (e) {
+                console.error('❌ Error clearing map:', e);
+                document.querySelector('.info').innerHTML += '<p style="color: red;">❌ Error clearing map: ' + e.message + '</p>';
+            }
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Page loaded, initializing map...');
+            initMap();
+        });
+    </script>
+</body>
+</html>

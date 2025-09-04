@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>MOH Oman Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  
+  <!-- External Libraries -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css">
+  <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+  
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="screen">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <img id="brandLogo" alt="Ministry of Health, Oman" class="brand-logo" style="display:none"/>
+        <div class="brand-fallback">MOH</div>
+        <div>
+          <div style="font-weight:800;letter-spacing:.06em">Ministry of Health Oman</div>
+          <div style="color:var(--muted);font-size:12px">Health Facility Dashboard</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;align-items:center"></div>
+    </header>
+    
+    <!-- Main Content -->
+    <main class="center">
+      <section id="map" class="panel">
+        <!-- Left Overlay -->
+        <div class="overlay overlay-left">
+          <!-- Map Filters -->
+          <section class="panel">
+            <h3>Map Filters</h3>
+            <div class="filter-group">
+              <div class="filter-item">
+                <div class="label">Governorate</div>
+                <select id="governorateFilter" class="filter-select">
+                  <option value="">All Governorates</option>
+                </select>
+              </div>
+              <div class="filter-item">
+                <div class="label">Facility Type</div>
+                <select id="facilityFilter" class="filter-select">
+                  <option value="">All Facilities</option>
+                  <option value="Blood Banks">Blood Banks</option>
+                  <option value="Clinics">Clinics</option>
+                  <option value="Diagnostic Center">Diagnostic Center</option>
+                  <option value="Health Centers">Health Centers</option>
+                  <option value="Health Complex">Health Complex</option>
+                  <option value="Hospital Locations">Hospital Locations</option>
+                  <option value="Pharmacies">Pharmacies</option>
+                </select>
+              </div>
+              <div class="filter-item">
+                <button id="resetFilters" class="filter-select" style="width:100%; background:var(--accent); color:#003; font-weight:600; cursor:pointer; border:none;">
+                  Reset Filters
+                </button>
+              </div>
+            </div>
+          </section>
+          
+          <!-- Births vs Deaths Chart -->
+          <section class="panel">
+            <h3>Births vs Deaths (Combo Chart)</h3>
+            <div style="color:var(--muted);font-size:12px">From <b>Birth Death.csv</b> - Bars: Births, Line: Deaths</div>
+            <div class="chart-container">
+              <canvas id="lineBD"></canvas>
+            </div>
+          </section>
+          
+          <!-- Hospital Bed Distribution -->
+          <section class="panel">
+            <h3>Hospital Bed Distribution</h3>
+            <div style="color:var(--muted);font-size:12px">From <b>Bed.csv</b></div>
+            <div class="chart-container">
+              <canvas id="bedChart"></canvas>
+            </div>
+          </section>
+        </div>
+
+        <!-- Right Overlay -->
+        <div class="overlay overlay-right">
+          <!-- Major Hospitals Visitors -->
+          <section class="panel">
+            <h3>Major Hospitals (Visitors)</h3>
+            <canvas id="barsVisitors" height="150"></canvas>
+          </section>
+          
+          <!-- Map Legend -->
+          <section class="panel">
+            <h3>Map Legend</h3>
+            <div id="legend" class="legend"></div>
+          </section>
+          
+          <!-- Hospital Specialties -->
+          <section class="panel">
+            <h3>Hospital Specialties</h3>
+            <div style="color:var(--muted);font-size:12px">From <b>Specialties.csv</b></div>
+            <div id="specialtiesList" class="specialties-list"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Custom JavaScript -->
+  <script src="app.js"></script>
+</body>
+</html>
